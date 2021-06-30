@@ -1,0 +1,74 @@
+/*
+ * Copyright IBM Corp. All Rights Reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+'use strict';
+
+const { Contract } = require('fabric-contract-api');
+const { encryptWithProof, verifyProof } = require("./lib");
+const paillier = require("paillier-js");
+const bigInt = require('big-integer')
+
+const pubKey = {
+    n: "9142559422016260560931665512001863622192737727222746187521723222425623797100196788347197337200163980661910528758444018198289135767127347865954852737280643",
+    _n2: "83586392785098300373105871655651997088058199889325027474686903736938183138596392256468839085054040151016735207633172062354917353288800816588407702087931884194474122927168568692543928479791158663949840750960717009435660564161110308292064882552794788220941292794801781596377259556992297333646726642418542493449",
+    g: "27135323410701433747587625893051088585652824629534691913928433283508183656855844990808069189718897402653426041367853854588636073847732776991784574018380945834187859526225849489382045734471108175745883198325240842613355058355521309786641343184060255004206656359059559912284474602665521053613154627390844941581",
+  };
+
+const bits = 512
+
+class VoteChaincode extends Contract {
+
+    async InitLedger(ctx) {
+
+        const initialState = {
+            ID: 'poll1',
+            value: '21668439391028451187510297086136305347885828694571446969122370223055998149821046171238132498399806845286425792005205343718505290082587026067257832290991562349362117647598073269987216519149732520395199702087178222312412787755632503706133293177035458325484936723630408321320770383718341693772062627122191446155',
+            initialProof: '21806989579799701201806938902497380803482734018784364536304130936468701084671127371332785692396902011170947232885329259564958021345850220073187867021150925620027917144290443840602785556164731848875881882254496478539457935179512231844043220036475983060319750562418467949304736462134866560722204887495536770018,74587520376354396735664690405433775679698115128523828946939523168482017661441,3122574952715295549880836487342320470257106428318959637065346174581792326809812335686817363886767133398068641264468228061216353570932378599852611049748829'
+        }
+        
+        await ctx.stub.putState(initialState.ID, Buffer.from(JSON.stringify(initialState)));
+    }
+
+    async Vote(ctx, vote, proof) {
+
+        const allowedVotes = [1, -1]
+        const publicKey = new paillier.PublicKey(pubKey.n, pubKey.g);
+        proof = JSON.parse(proof)
+        const parsedProof = proof.map( e => e.map(g => bigInt(g)))
+
+        const isVoteValid = verifyProof(publicKey, bigInt(vote), parsedProof, allowedVotes, bits) 
+
+        if(isVoteValid) {
+
+            const bufferOldState = await ctx.stub.getState('poll1');
+            const oldState = JSON.parse(bufferOldState.toString())
+            
+            const newState = publicKey.addition(vote, oldState.value) // NON DETERMINISTIC !!!!!!
+            const newVote = {
+                ID: 'poll1',
+                value: newState.toString(),
+                initialProof: oldState.initialProof
+            }
+
+            ctx.stub.putState('poll1', Buffer.from(JSON.stringify(newVote)));
+            
+            return JSON.stringify(newVote);
+        }
+
+        return {}
+    }
+
+    async ReadVoteState(ctx, id) {
+        const transactionJSON = await ctx.stub.getState(id); // get the asset from chaincode state
+        if (!transactionJSON || transactionJSON.length === 0) {
+            throw new Error(`The transaction ${id} does not exist`);
+        }
+        return transactionJSON.toString();
+    }
+
+}
+
+module.exports = VoteChaincode;
