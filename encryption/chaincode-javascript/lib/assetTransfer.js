@@ -16,18 +16,28 @@ const sss = require('shamirs-secret-sharing')
 
 const deterministicEncryption = { mode: CryptoJS.mode.ECB };
 
-// const getSymmetricKey = () =>
-//     readFileSync('/etc/hyperledger/fabric/ledger_encryption.key').toString();
+/* 
+ * This is only for testing, normally it should be generated and then secretly shared as shares between 
+ * peers of organisations.
+ * Only shares are then uploaded to the docker container of the chaincode.
+ * The chaincodew will then take care of the reconstruction of the key, if the threshold is not suffiecient
+ * such that only one peer is trying to get the data, nothing will happens! 
+ * The data will remain safe and it will not be decrypted, no key is recovered!
+*/
 const getSymmetricKey = () => '3t6w9z$C&F)J@NcRfUjXnZr4u7x!A%D*'
+//     readFileSync('/etc/hyperledger/fabric/ledger_encryption.key').toString();
 
-// Add shamir secret sharing part, first get the key and then fdivide it into number of parts
+
+// Add shamir secret sharing part, first get the key and then divide it into number of parts
 const shares = sss.split(getSymmetricKey(), { shares: 10, threshold: 2 })
-// Determine the threshold for peers to be able to recover the key.
-// const recovered = sss.combine(shares.slice(2, 4))
-// console.log(recovered.toString()) // 'secret key'
+/* 
+ * Determine the threshold for peers to be able to recover the key.
+ * Such step need to be considered when doing production scenario!
+ */
+const getKey = () => sss.combine(shares.slice(2, 4))
 
 function encryptId(id) {
-    const recovered = sss.combine(shares.slice(2, 4))
+    const recovered = getKey()
 
     const secret_key = CryptoJS.enc.Utf8.parse(
         SHA256(recovered + id).toString()
@@ -44,7 +54,7 @@ function encryptId(id) {
 
 function encrypt(asset, id) {
     // Step 1
-    const recovered = sss.combine(shares.slice(2, 4))
+    const recovered = getKey()
 
     // Step 2
     const secret_key = CryptoJS.enc.Utf8.parse(
@@ -67,17 +77,14 @@ function encrypt(asset, id) {
 }
 
 function decrypt(asset, id) {
-    // Step 1
-    const recovered = sss.combine(shares.slice(2, 4))
+    const recovered = getKey()
 
-    // Step 2
     const secret_key = CryptoJS.enc.Utf8.parse(
         SHA256(recovered + id).toString()
     );
 
     const decryptedResult = {};
 
-    // Step 3
     Object.keys(asset).forEach((key) => {
         const decryptedString = AES.decrypt(
             asset[key],
@@ -87,7 +94,6 @@ function decrypt(asset, id) {
         decryptedResult[key] = JSON.parse(decryptedString).v;
     });
 
-    // Step 4
     return decryptedResult;
 }
 
@@ -172,10 +178,11 @@ class AssetTransfer extends Contract {
 
     // CreateAsset issues a new asset to the world state with given details.
     async CreateAssetNoEncryption(ctx, id, color, size, owner, appraisedValue) {
-        const exists = await this.AssetExists(ctx, id);
-        if (exists) {
-            throw new Error(`The asset ${id} already exists`);
-        }
+        //  When testing the next three lines are not working probably
+        // const exists = await this.AssetExists(ctx, id);
+        // if (exists) {
+        //     throw new Error(`The asset ${id} already exists`);
+        // }
 
         const asset = {
             ID: id,
@@ -190,9 +197,11 @@ class AssetTransfer extends Contract {
 
     // ReadAsset returns the asset stored in the world state with given id.
     async ReadAsset(ctx, id) {
-        const encryptedId = encryptId(asset, id); 
-    
-        const assetJSON = await ctx.stub.getState(encryptedId); // get the asset from chaincode state
+        // const encryptedId = encryptId(asset, id); 
+        // // get the asset from chaincode state
+        // Normally, the id should be also encrypted when it containes important info
+        // But for test cases, raw ids will be used!
+        const assetJSON = await ctx.stub.getState(id); 
         if (!assetJSON || assetJSON.length === 0) {
             throw new Error(`The asset ${id} does not exist`);
         }
@@ -215,6 +224,25 @@ class AssetTransfer extends Contract {
 
     // UpdateAsset updates an existing asset in the world state with provided parameters.
     async UpdateAsset(ctx, id, color, size, owner, appraisedValue) {
+        const exists = await this.AssetExists(ctx, id);
+        if (!exists) {
+            throw new Error(`The asset ${id} does not exist`);
+        }
+
+        // overwriting original asset with new asset
+        const updatedAsset = {
+            ID: id,
+            Color: color,
+            Size: size,
+            Owner: owner,
+            AppraisedValue: appraisedValue,
+        };
+        return ctx.stub.putState(id, Buffer.from(JSON.stringify(updatedAsset)));
+    }
+
+
+    // UpdateAsset updates an existing asset in the world state with provided parameters with encryption.
+    async UpdateAssetEncryption(ctx, id, color, size, owner, appraisedValue) {
         const exists = await this.AssetExists(ctx, id);
         if (!exists) {
             throw new Error(`The asset ${id} does not exist`);
