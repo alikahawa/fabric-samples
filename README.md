@@ -1,13 +1,31 @@
 [//]: # (SPDX-License-Identifier: CC-BY-4.0)
 
-# Enhancing the privacy and security of Hyperledger Fabric smart contracts using different encryption methods
+# Secure enhancement for Hyperledger Fabric smart contract
 
-Research paper can be found in the [TU Delft Repository](https://repository.tudelft.nl/islandora/object/uuid:dbf548c7-849f-4aad-b4b7-455ba4a1835d?collection=education) 
+This research extends the research done by this
+[paper](https://repository.tudelft.nl/islandora/object/uuid:dbf548c7-849f-4aad-b4b7-455ba4a1835d?collection=education) 
+
+Research paper of this research can be found in the [TU Delft Repository](https://repository.tudelft.nl/islandora/object/uuid:dbf548c7-849f-4aad-b4b7-455ba4a1835d?collection=education) 
 
 ## Setup of network
 
-This is a fork from the original fabric samples. The documentation on how to install and setup the network can be found [here](https://hyperledger-fabric.readthedocs.io/en/release-2.3/test_network.html).
-You need to clone this repository instead of the HL Fabric one to be able to execute the code from the research.
+This is a fork from [this research](https://repository.tudelft.nl/islandora/object/uuid:dbf548c7-849f-4aad-b4b7-455ba4a1835d?collection=education) which is also forking from the original fabric samples. 
+
+This repo extends the research by adding secret sharing to it. The symmetric key, which used by Rado, is now shared secretlt between peers using Shamir's secret sharing scheme.
+This will increase the security of the encrypted data stored on the ledger.
+
+The numbers of peers has been increased and some folders has been removed for the sake of simplicity.
+
+First navigate to test-network folder:
+`cd fabric-samples/test-network`
+
+From inside the test-network directory:
+- Bring network down to remove any artifacts from previous work: `./network.sh down`
+- Then you can bring it up: `./network.sh up`
+- Create a channel: `./network.sh createChannel`
+- Start the basic chaincode on the channel: `./network.sh deployCC -ccn basic -ccp ../asset-transfer-basic/chaincode-javascript -ccl javascript`
+
+Further documentation on how to install and setup the network can be found [here](https://hyperledger-fabric.readthedocs.io/en/latest/test_network.html).
 
 ## Symmetric encryption setup
 
@@ -17,8 +35,8 @@ NOTE! The functions `CreateAssetNoEncryption` and `ReadAssetNoDecryption` will w
 2. Navigate to the `./test-network` folder
 3. Start the network using `./network.sh up`
 4. Create a new channel using `./network.sh createChannel`
-5. Run `export CHAINCODE_NAME=simple_encryption` where simple_encryption can be changed to the needed name of the chaincode
-6. Run `./network.sh deployCC -ccn ${CHAINCODE_NAME} -ccp ../symmetric-encryption/chaincode-javascript/ -ccl javascript -c mychannel` to install the chaincode
+<!-- 5. Run `export CHAINCODE_NAME=simple_encryption` where simple_encryption can be changed to the needed name of the chaincode -->
+5. Run `./network.sh deployCC -ccn simple_encryption -ccp ../encryption/chaincode-javascript/ -ccl javascript -c mychannel` to install the chaincode
 7. Run both `export PATH=${PWD}/../bin:$PATH` and `export FABRIC_CFG_PATH=$PWD/../config/`
 8. To enter Org1 POV, paste the following in the terminal
 ```
@@ -39,10 +57,6 @@ peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.exa
 
 ### Symmetric encryption performance evaluation
 
-1. Navigate to `./encryption/symmetric-encryption/chaincode-javascript`
+1. Navigate to `./encryption/chaincode-javascript`
 2. Run `npm install`
 3. Run `npm test`. You will see the chaincode evaluation time for the Read and Write methods, both with and without encryption for comparison.
-
-## Paillier encryption setup
-
-Follow the same steps for this implementation. The location of the code is `./encryption/paillier/chaincode-javascript`
